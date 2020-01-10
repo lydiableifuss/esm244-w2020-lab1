@@ -1,0 +1,112 @@
+---
+title: "Lab 1"
+author: "Lydia Bleifuss"
+date: "1/9/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(here) ###tell camila about this
+library(janitor)
+library(kableExtra)
+```
+
+Read in noaa_fisheries.csv data
+
+```{r}
+##ALWAYS use read_csv NOT read.csv
+
+###Use the head package becuse it doens't matter what file pathway, just look here ----> 
+
+us_landings <- read_csv(here("data","noaa_fisheries.csv"))
+```
+
+Now...make a tidy version of the data frame:
+
+```{r}
+###Good to keep one tidy version of your data and then when drawing different things out, call them new data frames so we always have the nice version 
+
+landings_tidy <- us_landings %>% 
+  janitor::clean_names() %>% 
+  #mutate can be used to add an aditional column with something new, but can also be used to reformate an existing colum 
+  mutate(state = str_to_lower(state),
+         afs_name = str_to_lower(afs_name)) %>% 
+  #this is saying mutate the existing colum, changing upper characters to lower) and then updating names column in same way 
+  mutate(dollars_num = parse_number(dollars_usd)) ###in Read R package, there are different things for parsing, which can pull numbers out of character columns, etc. etc. (parse_number)
+```
+
+Now let's just get some informaiton for salmon: 
+
+```{r}
+salmon_landings <- landings_tidy %>% 
+   #now, going to get rid of any entries that aren't specific to species level (basically if it says "aggregate" in the column afs_name, take out that word from that row) 
+  mutate(afs_clean = str_remove(afs_name, pattern="aggregate")) %>% 
+  #now I want to use filter to only keep the rows that I am interested in, asking, is this string detected, the string being "salmon" in this case 
+  filter(str_detect(afs_clean, pattern="salmon")) %>% 
+  #now I want to seperate the salmon from the specific species
+  separate(afs_clean, into = c("group","species"), sep=",")
+```
+
+
+Find some group summary data: 
+
+now we want to do some summarising (in excel, it's called pivot tables but here is is different)
+
+Find annual total US landings and dollar value (summing across al states) for each TYPE of salmon using 'group-by()' + 'summarize()'
+
+```{r}
+#if I want to find the annual total across states for each salmon species then I need to group by salmon species 
+
+salmon_summary <- salmon_landings %>% 
+  group_by(year,species) %>% 
+  #this doesn't look any different, we are just creating invisible group in R's brain, so when we use summarize() it uses those groups
+  summarize(
+    tot_landings = sum(landings_pounds), 
+    tot_value = sum(dollars_num)
+  )
+```
+
+
+Make a graph!
+
+```{r}
+salmon_landings_graph <- ggplot(data = salmon_summary, 
+                                aes(x = year, y = tot_landings)) +
+  geom_line(aes(color = species))
+#need to tell we are using ggplot, what data we are using and what type of graph
+#here, we also needed to say that we grouped different species, and we said that by group = x right after x and y in aes) -> can also do this in geom _line(aes(color = species)), either one don't need it in both places
+
+salmon_landings_graph
+```
+
+
+Now we can export our graph, it will aplly to the most recently run gg plot code, or we could name our graph and export it specifically 
+
+```{r}
+ggsave(plot = salmon_landings_graph,
+       here("figures", "us_salmon_LB.jpg"),
+       height =5,
+       width = 8) #we can also say explicitly where to send the graph we are exporting, perhaps the "figures" folder that came along when we cloned the repo 
+```
+
+We can also make a nice kable table: 
+
+```{r}
+#if I only want to head the first top lines in a function, we can do "head(30)" to keep first 30 and "tai(10)" to keep last 10 lines
+
+salmon_first_5 <- salmon_summary %>% 
+  head(5)
+```
+
+Use kable:
+
+```{r}
+kable(salmon_first_5) %>% 
+  kable_styling(bootstrap_options = "striped",
+                full_width =FALSE)
+```
